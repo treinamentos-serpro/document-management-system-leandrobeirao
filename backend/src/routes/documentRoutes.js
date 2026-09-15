@@ -9,6 +9,13 @@ function createRateLimiter({ windowMs, maxRequests }) {
   return (req, res, next) => {
     const key = req.get('X-User-Id') || req.ip || 'anonymous';
     const now = Date.now();
+
+    for (const [storedKey, storedEntry] of requests.entries()) {
+      if (now - storedEntry.windowStart >= windowMs) {
+        requests.delete(storedKey);
+      }
+    }
+
     const entry = requests.get(key);
 
     if (!entry || now - entry.windowStart >= windowMs) {
@@ -30,6 +37,7 @@ function createRateLimiter({ windowMs, maxRequests }) {
 
 function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
   const router = express.Router();
+  const uploadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 10 });
   const downloadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 30 });
   const upload = multer({
     storage: multer.diskStorage({
@@ -46,10 +54,10 @@ function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
         callback(null, `${crypto.randomUUID()}${extension}`);
       },
     }),
-    limits: { fileSize: maxFileSize, files: 1, fields: 1 },
+    limits: { fileSize: maxFileSize, files: 1, fields: 2 },
   });
 
-  router.post('/upload', upload.single('file'), controller.upload);
+  router.post('/upload', uploadRateLimiter, upload.single('file'), controller.upload);
   router.get('/documents', controller.list);
   router.get('/documents/:id/download', downloadRateLimiter, controller.download);
 
