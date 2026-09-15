@@ -1,44 +1,26 @@
 const express = require('express');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const multer = require('multer');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
-function createRateLimiter({ windowMs, maxRequests }) {
-  const requests = new Map();
-
-  return (req, res, next) => {
-    const key = req.get('X-User-Id') || req.ip || 'anonymous';
-    const now = Date.now();
-
-    for (const [storedKey, storedEntry] of requests.entries()) {
-      if (now - storedEntry.windowStart >= windowMs) {
-        requests.delete(storedKey);
-      }
-    }
-
-    const entry = requests.get(key);
-
-    if (!entry || now - entry.windowStart >= windowMs) {
-      requests.set(key, { count: 1, windowStart: now });
-      next();
-      return;
-    }
-
-    if (entry.count >= maxRequests) {
-      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+function createRateLimiter({ windowMs, limit }) {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.get('X-User-Id') || ipKeyGenerator(req.ip || 'anonymous'),
+    handler: (req, res) => {
       res.status(429).json({ error: 'Muitas requisições. Tente novamente em instantes.' });
-      return;
-    }
-
-    entry.count += 1;
-    next();
-  };
+    },
+  });
 }
 
 function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
   const router = express.Router();
-  const uploadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 10 });
-  const downloadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 30 });
+  const uploadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, limit: 10 });
+  const downloadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, limit: 30 });
   const upload = multer({
     storage: multer.diskStorage({
       destination: async (req, file, callback) => {
