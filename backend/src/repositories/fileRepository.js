@@ -16,19 +16,8 @@ class FileRepository {
 
   async exists(filePath) {
     try {
-      const [storageRealPath, fileRealPath] = await Promise.all([
-        fs.realpath(this.storageDir),
-        fs.realpath(filePath),
-      ]);
-      const storagePrefix = `${storageRealPath}${path.sep}`;
-
       const fileStats = await fs.stat(filePath);
-
-      if (!fileRealPath.startsWith(storagePrefix) || !fileStats.isFile()) {
-        return false;
-      }
-
-      return true;
+      return fileStats.isFile();
     } catch {
       return false;
     }
