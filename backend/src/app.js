@@ -13,7 +13,13 @@ function createApp() {
   const documentService = new DocumentService({ documentRepository, fileRepository });
   const documentController = new DocumentController(documentService);
 
-  app.use(express.json());
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  });
+  app.use(express.json({ limit: '100kb' }));
   app.use(createDocumentRoutes({
     controller: documentController,
     fileRepository,
@@ -29,9 +35,16 @@ function createApp() {
       return next(error);
     }
 
-    const statusCode = error.code === 'LIMIT_FILE_SIZE' ? 413 : error.statusCode || 500;
+    const statusCode = error.code === 'LIMIT_FILE_SIZE'
+      ? 413
+      : error.statusCode || 500;
+    const publicMessage = statusCode >= 500
+      ? 'Erro interno do servidor'
+      : error.message;
+
+    console.error(error);
     res.status(statusCode).json({
-      error: statusCode === 413 ? 'Arquivo excede o limite permitido' : error.message,
+      error: statusCode === 413 ? 'Arquivo excede o limite permitido' : publicMessage,
     });
   });
 

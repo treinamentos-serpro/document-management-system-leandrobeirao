@@ -1,22 +1,27 @@
 const crypto = require('node:crypto');
+const DocumentInputValidator = require('./documentInputValidator');
+const DocumentPresenter = require('./documentPresenter');
 
 class DocumentService {
-  constructor({ documentRepository, fileRepository }) {
+  constructor({
+    documentRepository,
+    fileRepository,
+    inputValidator = new DocumentInputValidator(),
+    presenter = new DocumentPresenter(),
+  }) {
     this.documentRepository = documentRepository;
     this.fileRepository = fileRepository;
+    this.inputValidator = inputValidator;
+    this.presenter = presenter;
   }
 
   async createDocument(file, owner) {
-    if (!file) {
-      const error = new Error('Arquivo é obrigatório');
-      error.statusCode = 400;
-      throw error;
-    }
+    this.inputValidator.validateFile(file);
 
-    if (!owner) {
+    try {
+      this.inputValidator.validateOwner(owner);
+    } catch (error) {
       await this.fileRepository.remove(file.path);
-      const error = new Error('Usuário é obrigatório');
-      error.statusCode = 400;
       throw error;
     }
 
@@ -32,7 +37,7 @@ class DocumentService {
 
     try {
       this.documentRepository.save(document);
-      return this.toPublicDocument(document);
+      return this.presenter.toPublic(document);
     } catch (error) {
       await this.fileRepository.remove(file.path);
       throw error;
@@ -40,7 +45,7 @@ class DocumentService {
   }
 
   listDocuments(owner) {
-    return this.documentRepository.findAll(owner).map((document) => this.toPublicDocument(document));
+    return this.presenter.toPublicList(this.documentRepository.findAll(owner));
   }
 
   async getDownload(documentId, owner) {
@@ -58,7 +63,7 @@ class DocumentService {
       throw error;
     }
 
-    const filePath = this.fileRepository.resolveStoredPath(document.storedName);
+    const filePath = await this.fileRepository.resolveStoredPath(document.storedName);
     if (!(await this.fileRepository.exists(filePath))) {
       const error = new Error('Arquivo não encontrado');
       error.statusCode = 404;
@@ -66,11 +71,6 @@ class DocumentService {
     }
 
     return { document, filePath };
-  }
-
-  toPublicDocument(document) {
-    const { storedName, storagePath, ...publicDocument } = document;
-    return publicDocument;
   }
 }
 

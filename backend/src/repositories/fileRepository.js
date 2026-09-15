@@ -16,19 +16,38 @@ class FileRepository {
 
   async exists(filePath) {
     try {
-      await fs.access(filePath);
+      const [storageRealPath, fileRealPath] = await Promise.all([
+        fs.realpath(this.storageDir),
+        fs.realpath(filePath),
+      ]);
+      const storagePrefix = `${storageRealPath}${path.sep}`;
+
+      const fileStats = await fs.stat(filePath);
+
+      if (!fileRealPath.startsWith(storagePrefix) || !fileStats.isFile()) {
+        return false;
+      }
+
       return true;
     } catch {
       return false;
     }
   }
 
-  resolveStoredPath(storedName) {
+  async resolveStoredPath(storedName) {
+    if (!storedName || path.basename(storedName) !== storedName) {
+      const error = new Error('Arquivo não encontrado');
+      error.statusCode = 404;
+      throw error;
+    }
+
     const resolvedPath = path.resolve(this.storageDir, storedName);
     const storagePrefix = `${path.resolve(this.storageDir)}${path.sep}`;
 
     if (!resolvedPath.startsWith(storagePrefix)) {
-      throw new Error('Caminho de arquivo inválido');
+      const error = new Error('Arquivo não encontrado');
+      error.statusCode = 404;
+      throw error;
     }
 
     return resolvedPath;

@@ -25,7 +25,11 @@ class DocumentController {
         req.params.id,
         req.get('X-User-Id'),
       );
-      res.download(filePath, document.originalName);
+      res.download(filePath, document.originalName, (error) => {
+        if (error && !res.headersSent) {
+          next(error);
+        }
+      });
     } catch (error) {
       next(error);
     }

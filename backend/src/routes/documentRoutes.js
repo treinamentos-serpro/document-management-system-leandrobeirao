@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const crypto = require('node:crypto');
 const path = require('node:path');
 
 function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
@@ -16,10 +17,10 @@ function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
       },
       filename: (req, file, callback) => {
         const extension = path.extname(file.originalname);
-        callback(null, `${require('node:crypto').randomUUID()}${extension}`);
+        callback(null, `${crypto.randomUUID()}${extension}`);
       },
     }),
-    limits: { fileSize: maxFileSize },
+    limits: { fileSize: maxFileSize, files: 1, fields: 1 },
   });
 
   router.post('/upload', upload.single('file'), controller.upload);
