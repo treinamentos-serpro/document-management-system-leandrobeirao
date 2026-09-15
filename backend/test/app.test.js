@@ -1,5 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+
+const testStorageDir = path.join(os.tmpdir(), `dms-http-${process.pid}-${crypto.randomUUID()}`);
+process.env.STORAGE_DIR = testStorageDir;
+
 const app = require('../src/app');
 const { createApp } = require('../src/app');
 
@@ -8,6 +16,53 @@ const { createApp } = require('../src/app');
 test('o app backend é exportado', () => {
   assert.ok(app, 'o app deve estar definido');
   assert.strictEqual(typeof app, 'function', 'o app Express deve ser uma função');
+});
+
+test('upload, listagem e download funcionam em conjunto', async (t) => {
+  const isolatedApp = createApp();
+  const server = isolatedApp.listen(0);
+
+  t.after(async () => {
+    server.close();
+    await fs.rm(testStorageDir, { recursive: true, force: true });
+  });
+
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const userId = 'endpoint-test-user';
+  const fileContent = 'conteúdo do documento de teste';
+  const formData = new FormData();
+  formData.append('file', new Blob([fileContent], { type: 'text/plain' }), 'documento.txt');
+
+  const uploadResponse = await fetch(`${baseUrl}/upload`, {
+    method: 'POST',
+    headers: { 'X-User-Id': userId },
+    body: formData,
+  });
+  const uploadedDocument = await uploadResponse.json();
+
+  assert.strictEqual(uploadResponse.status, 201);
+  assert.strictEqual(uploadedDocument.originalName, 'documento.txt');
+  assert.strictEqual(uploadedDocument.owner, userId);
+  assert.ok(uploadedDocument.id);
+
+  const listResponse = await fetch(`${baseUrl}/documents`, {
+    headers: { 'X-User-Id': userId },
+  });
+  const documents = await listResponse.json();
+
+  assert.strictEqual(listResponse.status, 200);
+  assert.strictEqual(documents.length, 1);
+  assert.strictEqual(documents[0].id, uploadedDocument.id);
+
+  const downloadResponse = await fetch(
+    `${baseUrl}/documents/${uploadedDocument.id}/download`,
+    { headers: { 'X-User-Id': userId } },
+  );
+
+  assert.strictEqual(downloadResponse.status, 200);
+  assert.match(downloadResponse.headers.get('content-disposition'), /documento\.txt/);
+  assert.strictEqual(await downloadResponse.text(), fileContent);
 });
 
 test('o download aplica rate limiting por usuário', async (t) => {
