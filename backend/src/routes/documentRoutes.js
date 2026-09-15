@@ -10,7 +10,7 @@ function createRateLimiter({ windowMs, limit }) {
     limit,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.get('X-User-Id') || ipKeyGenerator(req.ip || 'anonymous'),
+    keyGenerator: (req) => req.get('X-User-Id') || ipKeyGenerator(req.ip),
     handler: (req, res) => {
       res.status(429).json({ error: 'Muitas requisições. Tente novamente em instantes.' });
     },
