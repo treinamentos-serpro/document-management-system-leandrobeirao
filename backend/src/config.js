@@ -12,8 +12,18 @@ function positiveNumber(value, fallback, name) {
   return number;
 }
 
+function portNumber(value, fallback) {
+  const port = Number(value ?? fallback);
+
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65535) {
+    throw new Error('PORT deve estar entre 0 e 65535');
+  }
+
+  return port;
+}
+
 module.exports = {
-  port: positiveNumber(process.env.PORT, 3000, 'PORT'),
+  port: portNumber(process.env.PORT, 3000),
   storageDir: process.env.STORAGE_DIR
     ? path.resolve(process.env.STORAGE_DIR)
     : path.join(projectRoot, 'storage'),

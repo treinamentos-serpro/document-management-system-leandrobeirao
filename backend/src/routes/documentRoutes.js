@@ -1,10 +1,26 @@
 const express = require('express');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const multer = require('multer');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
+function createRateLimiter({ windowMs, limit }) {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.get('X-User-Id') || ipKeyGenerator(req.ip),
+    handler: (req, res) => {
+      res.status(429).json({ error: 'Muitas requisições. Tente novamente em instantes.' });
+    },
+  });
+}
+
 function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
   const router = express.Router();
+  const uploadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, limit: 10 });
+  const downloadRateLimiter = createRateLimiter({ windowMs: 60 * 1000, limit: 30 });
   const upload = multer({
     storage: multer.diskStorage({
       destination: async (req, file, callback) => {
@@ -20,12 +36,12 @@ function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
         callback(null, `${crypto.randomUUID()}${extension}`);
       },
     }),
-    limits: { fileSize: maxFileSize, files: 1, fields: 1 },
+    limits: { fileSize: maxFileSize, files: 1 },
   });
 
-  router.post('/upload', upload.single('file'), controller.upload);
+  router.post('/upload', uploadRateLimiter, upload.single('file'), controller.upload);
   router.get('/documents', controller.list);
-  router.get('/documents/:id/download', controller.download);
+  router.get('/documents/:id/download', downloadRateLimiter, controller.download);
 
   return router;
 }

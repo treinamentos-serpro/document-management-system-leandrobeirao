@@ -63,7 +63,7 @@ class DocumentService {
       throw error;
     }
 
-    const filePath = this.fileRepository.resolveStoredPath(document.storedName);
+    const filePath = await this.fileRepository.resolveStoredPath(document.storedName);
     if (!(await this.fileRepository.exists(filePath))) {
       const error = new Error('Arquivo não encontrado');
       error.statusCode = 404;
@@ -72,7 +72,6 @@ class DocumentService {
 
     return { document, filePath };
   }
-
 }
 
 module.exports = DocumentService;
