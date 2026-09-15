@@ -36,7 +36,7 @@ function createDocumentRoutes({ controller, fileRepository, maxFileSize }) {
         callback(null, `${crypto.randomUUID()}${extension}`);
       },
     }),
-    limits: { fileSize: maxFileSize, files: 1, fields: 2 },
+    limits: { fileSize: maxFileSize, files: 1 },
   });
 
   router.post('/upload', uploadRateLimiter, upload.single('file'), controller.upload);

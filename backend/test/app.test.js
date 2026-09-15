@@ -39,6 +39,30 @@ test('o download aplica rate limiting por usuário', async (t) => {
   assert.strictEqual(statuses.at(-1), 429);
 });
 
+test('o download aplica rate limiting por IP quando não há usuário', async (t) => {
+  const isolatedApp = createApp();
+  const server = isolatedApp.listen(0);
+  const originalConsoleError = console.error;
+
+  console.error = () => {};
+
+  t.after(() => {
+    console.error = originalConsoleError;
+    server.close();
+  });
+
+  const { port } = server.address();
+  const statuses = [];
+
+  for (let index = 0; index < 31; index += 1) {
+    const response = await fetch(`http://127.0.0.1:${port}/documents/inexistente/download`);
+    statuses.push(response.status);
+  }
+
+  assert.ok(statuses.slice(0, 30).every((status) => status === 404));
+  assert.strictEqual(statuses.at(-1), 429);
+});
+
 test('o upload aplica rate limiting por usuário', async (t) => {
   const isolatedApp = createApp();
   const server = isolatedApp.listen(0);
