@@ -8,7 +8,7 @@ class DocumentController {
 
   async upload(req, res, next) {
     try {
-      const document = await this.documentService.createDocument(req.file, req.get('X-User-Id'));
+      const document = await this.documentService.createDocument(req.file, req.user.id);
       res.status(201).json(document);
     } catch (error) {
       next(error);
@@ -16,14 +16,14 @@ class DocumentController {
   }
 
   list(req, res) {
-    res.json(this.documentService.listDocuments(req.get('X-User-Id')));
+    res.json(this.documentService.listDocuments(req.user.id));
   }
 
   async download(req, res, next) {
     try {
       const { document, filePath } = await this.documentService.getDownload(
         req.params.id,
-        req.get('X-User-Id'),
+        req.user.id,
       );
       res.download(filePath, document.originalName, (error) => {
         if (error && !res.headersSent) {

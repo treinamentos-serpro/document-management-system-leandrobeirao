@@ -28,4 +28,6 @@ module.exports = {
     ? path.resolve(process.env.STORAGE_DIR)
     : path.join(projectRoot, 'storage'),
   maxFileSize: positiveNumber(process.env.MAX_FILE_SIZE, 10 * 1024 * 1024, 'MAX_FILE_SIZE'),
+  jwtSecret: process.env.JWT_SECRET,
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
 };

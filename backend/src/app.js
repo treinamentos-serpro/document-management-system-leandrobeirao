@@ -1,17 +1,30 @@
 const express = require('express');
 const config = require('./config');
+const AuthController = require('./controllers/authController');
 const DocumentController = require('./controllers/documentController');
 const DocumentRepository = require('./repositories/documentRepository');
 const FileRepository = require('./repositories/fileRepository');
+const UserRepository = require('./repositories/userRepository');
+const createAuthenticate = require('./middlewares/authenticate');
+const createAuthRoutes = require('./routes/authRoutes');
 const createDocumentRoutes = require('./routes/documentRoutes');
+const AuthService = require('./services/authService');
 const DocumentService = require('./services/documentService');
 
 function createApp() {
   const app = express();
   const documentRepository = new DocumentRepository();
   const fileRepository = new FileRepository(config.storageDir);
+  const userRepository = new UserRepository();
+  const authService = new AuthService({
+    userRepository,
+    jwtSecret: config.jwtSecret,
+    jwtExpiresIn: config.jwtExpiresIn,
+  });
   const documentService = new DocumentService({ documentRepository, fileRepository });
+  const authController = new AuthController(authService);
   const documentController = new DocumentController(documentService);
+  const authenticate = createAuthenticate(authService);
 
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -20,10 +33,12 @@ function createApp() {
     next();
   });
   app.use(express.json({ limit: '100kb' }));
+  app.use(createAuthRoutes(authController));
   app.use(createDocumentRoutes({
     controller: documentController,
     fileRepository,
     maxFileSize: config.maxFileSize,
+    authenticate,
   }));
 
   app.get('/health', (req, res) => {

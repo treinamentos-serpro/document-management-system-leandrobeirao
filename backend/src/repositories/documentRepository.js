@@ -10,7 +10,7 @@ class DocumentRepository {
 
   findAll(owner) {
     const documents = [...this.documents.values()];
-    return owner ? documents.filter((document) => document.owner === owner) : documents;
+    return documents.filter((document) => document.owner === owner);
   }
 
   findById(id) {

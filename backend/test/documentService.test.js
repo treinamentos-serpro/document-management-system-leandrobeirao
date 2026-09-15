@@ -35,7 +35,7 @@ test('DocumentService cria documento com sucesso', async (t) => {
   assert.ok(document.id);
   assert.strictEqual(document.storedName, undefined);
   assert.strictEqual(document.storagePath, undefined);
-  assert.strictEqual(documentRepository.findAll().length, 1);
+  assert.strictEqual(documentRepository.findAll('user-1').length, 1);
 });
 
 test('DocumentService rejeita criação sem usuário e remove o arquivo', async (t) => {

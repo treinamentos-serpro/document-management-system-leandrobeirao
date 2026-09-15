@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { uploadDocument } from '../services/documentService';
 
-export default function UploadComponent({ owner, onUploaded }) {
+export default function UploadComponent({ token, onUploaded }) {
   const inputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
@@ -18,7 +18,7 @@ export default function UploadComponent({ owner, onUploaded }) {
     setError('');
     setIsUploading(true);
     try {
-      await uploadDocument(file, owner);
+      await uploadDocument(file, token);
       inputRef.current.value = '';
       onUploaded();
     } catch (uploadError) {

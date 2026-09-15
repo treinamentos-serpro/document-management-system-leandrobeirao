@@ -57,7 +57,7 @@ class DocumentService {
       throw error;
     }
 
-    if (owner && document.owner !== owner) {
+    if (document.owner !== owner) {
       const error = new Error('Acesso negado');
       error.statusCode = 403;
       throw error;

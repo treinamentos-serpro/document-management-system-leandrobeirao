@@ -7,15 +7,45 @@ const path = require('node:path');
 
 const testStorageDir = path.join(os.tmpdir(), `dms-http-${process.pid}-${crypto.randomUUID()}`);
 process.env.STORAGE_DIR = testStorageDir;
+process.env.JWT_SECRET = 'test-secret-with-at-least-32-characters';
 
 const app = require('../src/app');
 const { createApp } = require('../src/app');
+
+async function registerUser(baseUrl, username) {
+  const response = await fetch(`${baseUrl}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password: 'password-123' }),
+  });
+  const session = await response.json();
+
+  assert.strictEqual(response.status, 201);
+  return session;
+}
+
+function authorization(token) {
+  return { Authorization: `Bearer ${token}` };
+}
 
 // Teste de fumaça do seed: garante que o app Express foi exportado.
 // Novos testes serão adicionados durante os Steps 2, 6 e 7 com auxílio do Copilot.
 test('o app backend é exportado', () => {
   assert.ok(app, 'o app deve estar definido');
   assert.strictEqual(typeof app, 'function', 'o app Express deve ser uma função');
+});
+
+test('rotas de documentos exigem autenticação', async (t) => {
+  const isolatedApp = createApp();
+  const server = isolatedApp.listen(0);
+
+  t.after(() => server.close());
+
+  const { port } = server.address();
+  const response = await fetch(`http://127.0.0.1:${port}/documents`);
+
+  assert.strictEqual(response.status, 401);
+  assert.deepStrictEqual(await response.json(), { error: 'Token de acesso é obrigatório' });
 });
 
 test('upload, listagem e download funcionam em conjunto', async (t) => {
@@ -29,25 +59,25 @@ test('upload, listagem e download funcionam em conjunto', async (t) => {
 
   const { port } = server.address();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const userId = 'endpoint-test-user';
+  const session = await registerUser(baseUrl, 'endpoint-test-user');
   const fileContent = 'conteúdo do documento de teste';
   const formData = new FormData();
   formData.append('file', new Blob([fileContent], { type: 'text/plain' }), 'documento.txt');
 
   const uploadResponse = await fetch(`${baseUrl}/upload`, {
     method: 'POST',
-    headers: { 'X-User-Id': userId },
+    headers: authorization(session.token),
     body: formData,
   });
   const uploadedDocument = await uploadResponse.json();
 
   assert.strictEqual(uploadResponse.status, 201);
   assert.strictEqual(uploadedDocument.originalName, 'documento.txt');
-  assert.strictEqual(uploadedDocument.owner, userId);
+  assert.strictEqual(uploadedDocument.owner, session.user.id);
   assert.ok(uploadedDocument.id);
 
   const listResponse = await fetch(`${baseUrl}/documents`, {
-    headers: { 'X-User-Id': userId },
+    headers: authorization(session.token),
   });
   const documents = await listResponse.json();
 
@@ -57,7 +87,7 @@ test('upload, listagem e download funcionam em conjunto', async (t) => {
 
   const downloadResponse = await fetch(
     `${baseUrl}/documents/${uploadedDocument.id}/download`,
-    { headers: { 'X-User-Id': userId } },
+    { headers: authorization(session.token) },
   );
 
   assert.strictEqual(downloadResponse.status, 200);
@@ -78,13 +108,13 @@ test('o download aplica rate limiting por usuário', async (t) => {
   });
 
   const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const session = await registerUser(baseUrl, 'rate-limit-test-user');
   const statuses = [];
 
   for (let index = 0; index < 31; index += 1) {
-    const response = await fetch(`http://127.0.0.1:${port}/documents/inexistente/download`, {
-      headers: {
-        'X-User-Id': 'rate-limit-test-user',
-      },
+    const response = await fetch(`${baseUrl}/documents/inexistente/download`, {
+      headers: authorization(session.token),
     });
 
     statuses.push(response.status);
@@ -94,7 +124,7 @@ test('o download aplica rate limiting por usuário', async (t) => {
   assert.strictEqual(statuses.at(-1), 429);
 });
 
-test('o download aplica rate limiting por IP quando não há usuário', async (t) => {
+test('cada usuário vê e acessa apenas seus documentos', async (t) => {
   const isolatedApp = createApp();
   const server = isolatedApp.listen(0);
   const originalConsoleError = console.error;
@@ -107,15 +137,28 @@ test('o download aplica rate limiting por IP quando não há usuário', async (t
   });
 
   const { port } = server.address();
-  const statuses = [];
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const ownerSession = await registerUser(baseUrl, 'document-owner');
+  const otherSession = await registerUser(baseUrl, 'other-user');
+  const formData = new FormData();
+  formData.append('file', new Blob(['privado']), 'privado.txt');
 
-  for (let index = 0; index < 31; index += 1) {
-    const response = await fetch(`http://127.0.0.1:${port}/documents/inexistente/download`);
-    statuses.push(response.status);
-  }
+  const uploadResponse = await fetch(`${baseUrl}/upload`, {
+    method: 'POST',
+    headers: authorization(ownerSession.token),
+    body: formData,
+  });
+  const document = await uploadResponse.json();
+  const listResponse = await fetch(`${baseUrl}/documents`, {
+    headers: authorization(otherSession.token),
+  });
+  const downloadResponse = await fetch(`${baseUrl}/documents/${document.id}/download`, {
+    headers: authorization(otherSession.token),
+  });
 
-  assert.ok(statuses.slice(0, 30).every((status) => status === 404));
-  assert.strictEqual(statuses.at(-1), 429);
+  assert.strictEqual(uploadResponse.status, 201);
+  assert.deepStrictEqual(await listResponse.json(), []);
+  assert.strictEqual(downloadResponse.status, 403);
 });
 
 test('o upload aplica rate limiting por usuário', async (t) => {
@@ -131,14 +174,14 @@ test('o upload aplica rate limiting por usuário', async (t) => {
   });
 
   const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const session = await registerUser(baseUrl, 'upload-rate-limit-test-user');
   const statuses = [];
 
   for (let index = 0; index < 11; index += 1) {
-    const response = await fetch(`http://127.0.0.1:${port}/upload`, {
+    const response = await fetch(`${baseUrl}/upload`, {
       method: 'POST',
-      headers: {
-        'X-User-Id': 'upload-rate-limit-test-user',
-      },
+      headers: authorization(session.token),
     });
 
     statuses.push(response.status);

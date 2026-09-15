@@ -46,14 +46,17 @@ Siga este fluxo de dependência:
 
 ## Contratos esperados
 
-- `POST /upload`: exige `multipart/form-data`, campo `file` e cabeçalho `X-User-Id`
-- `GET /documents`: lista documentos, com filtro opcional por usuário
+- `POST /auth/register`: cadastra usuário e retorna um JWT
+- `POST /auth/login`: autentica credenciais e retorna um JWT
+- `POST /upload`: exige Bearer token, `multipart/form-data` e campo `file`
+- `GET /documents`: lista apenas os documentos do usuário autenticado
 - `GET /documents/:id/download`: baixa o arquivo e valida propriedade do usuário
 - `GET /health`: responde `200` com `{ "status": "ok" }`
 
 ## Validações e critérios de aceite
 
-- Upload sem arquivo ou sem usuário deve falhar com `400`
+- Requisição documental sem JWT válido deve falhar com `401`
+- Upload sem arquivo deve falhar com `400`
 - Documento inexistente deve falhar com `404`
 - Documento de outro usuário deve falhar com `403`
 - Arquivo acima do limite deve falhar com `413`

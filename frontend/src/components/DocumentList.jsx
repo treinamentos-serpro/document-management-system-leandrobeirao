@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { listDocuments } from '../services/documentService';
 import DownloadButton from './DownloadButton';
 
-export default function DocumentList({ owner, refreshToken }) {
+export default function DocumentList({ token, refreshToken }) {
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -12,7 +12,7 @@ export default function DocumentList({ owner, refreshToken }) {
     setIsLoading(true);
     setError('');
 
-    listDocuments(owner)
+    listDocuments(token)
       .then((nextDocuments) => {
         if (isCurrent) setDocuments(nextDocuments);
       })
@@ -26,7 +26,7 @@ export default function DocumentList({ owner, refreshToken }) {
     return () => {
       isCurrent = false;
     };
-  }, [owner, refreshToken]);
+  }, [token, refreshToken]);
 
   if (isLoading) return <p>Carregando documentos...</p>;
   if (error) return <p role="alert">{error}</p>;
@@ -37,7 +37,7 @@ export default function DocumentList({ owner, refreshToken }) {
       {documents.map((document) => (
         <li key={document.id}>
           <span>{document.originalName} ({document.size} bytes)</span>{' '}
-          <DownloadButton document={document} owner={owner} />
+          <DownloadButton document={document} token={token} />
         </li>
       ))}
     </ul>
